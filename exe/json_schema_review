@@ -1,0 +1,18 @@
+#!/usr/bin/env ruby
+
+require "json_schema/review"
+require "json_schema/review/cli"
+
+require "slop"
+
+opts = Slop.parse do |opt|
+  # help
+  opt.on "-h", "--help" do
+    puts opt
+    exit
+  end
+end
+
+files = opts.arguments
+
+::JsonSchema::Review::CLI.new(files, opts).run
