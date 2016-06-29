@@ -4,7 +4,7 @@ module JsonSchema::Review
   class Reviewer
     def review(schema)
       errors = []
-      errors.push(*review_schema(schema))
+      #errors.push(*review_schema(schema))
       errors.push(*review_links(schema.links))
     end
 
@@ -19,6 +19,12 @@ module JsonSchema::Review
     # basically
     def review_type(schema)
       return [] if schema.enum
+
+      try_compact = compact_schema(schema)
+
+      if try_compact
+        return review_type(try_compact)
+      end
 
       errors = []
 
@@ -94,7 +100,7 @@ module JsonSchema::Review
             errors.push("#{level} #{position}/#{convert_key(key)} is defined but type does not include object")
           end
         end
-      else
+      else # TODO: or type.empty?
         unless schema.max_properties || schema.additional_properties === false
           # pattern properties can limit any properties
           this_level = schema.pattern_properties.empty? ? "[ERROR]" : "[WARN]"
@@ -121,8 +127,6 @@ module JsonSchema::Review
           end
         end
       rescue => e
-        require "pry"
-        binding.pry
         raise e
       end
 
@@ -141,8 +145,86 @@ module JsonSchema::Review
       errors
     end
 
+    protected
     def convert_key(key)
       key.gsub(/_(\w)/) { $1.upcase }
+    end
+
+    # really heuristics
+    def compact_schema(schema)
+      #warn "[INFO] start to merge #{schema.id.to_s + schema.pointer}"
+
+      # unable to merge complex schema
+      unless (schema.one_of.size + schema.any_of.size + schema.all_of.size) == 1
+        return nil
+      end
+      to_merge = schema.one_of.first || schema.any_of.first || schema.all_of.first
+
+      unless to_merge.expanded?
+        return nil
+      end
+      #return nil unless to_merge.expanded?
+
+      #warn "[INFO] merging #{schema.id.to_s + schema.pointer}"
+
+      new_schema = ::JsonSchema::Schema.new
+      new_schema.copy_from(schema)
+      new_schema.fragment = schema.fragment
+
+      # remove
+      new_schema.one_of, new_schema.all_of, new_schema.any_of = [], [], []
+
+      %w[ multiple_of max max_exclusive min min_exclusive
+          max_length min_length pattern
+          items max_items min_items max_items unique_items
+          max_properties min_properties required dependencies
+          enum not
+      ].each do |key|
+        if override = to_merge.__send__(key)
+          original = new_schema.__send__(key)
+
+          if original
+            unless original == override
+              warn "[MERGE] #{schema.id.to_s + schema.pointer}/#{key}: #{original} #{override}"
+            end
+          else
+            new_schema.__send__("#{key}=", override)
+          end
+        end
+      end
+
+      # default is true
+      %w[ additional_items additional_properties ].each do |key|
+        original = new_schema.__send__(key)
+        override = to_merge.__send__(key)
+
+        if original === true
+          new_schema.__send__("#{key}=", override)
+        else
+          unless override === true
+            warn "[MERGE] #{schema.id.to_s + schema.pointer}/#{key}: #{original} #{override}"
+          end
+        end
+      end
+
+      %w[ properties pattern_properties
+          type all_of any_of one_of definitions
+      ].each do |key|
+        override = to_merge.__send__(key)
+
+        unless override.empty?
+          original = new_schema.__send__(key)
+          if original.empty?
+            new_schema.__send__("#{key}=", override)
+          elsif original == override
+            # Do nothing
+          else
+            warn "[MERGE] #{schema.id.to_s + schema.pointer}/#{key}: #{original} #{override}"
+          end
+        end
+      end
+
+      new_schema
     end
   end
 end

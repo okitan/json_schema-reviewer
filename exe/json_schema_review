@@ -9,6 +9,7 @@ opts = Slop.parse do |opt|
   opt.string "--schema_dir",            "**/*.json under this directory is used for resolving reference"
 
   opt.bool "--check_resolve_reference", "show errors if resolve reference failed"
+  opt.bool "--no_check_schema_validation"
 
   # help
   opt.on "-h", "--help" do
@@ -18,7 +19,6 @@ opts = Slop.parse do |opt|
 end
 
 files = opts.arguments
-
 
 # validations
 if files.empty?

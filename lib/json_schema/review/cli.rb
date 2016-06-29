@@ -24,12 +24,14 @@ module JsonSchema::Review
           end
 
           # TODO: review against property
-          Reviewer.new.review(schema).uniq.each do |review|
-            if review.start_with?("[WARN]")
-              # just show warning
-              warn review
-            else
-              assign_error(file, review)
+          unless opts[:no_check_schema_validation]
+            Reviewer.new.review(schema).uniq.each do |review|
+              if review.start_with?("[WARN]")
+                # just show warning
+                warn review
+              else
+                assign_error(file, review)
+              end
             end
           end
         end
@@ -85,6 +87,8 @@ module JsonSchema::Review
               end
             end
           end
+
+          store.each {|key, value| value.expand_references(store: store) }
 
           store
         end
