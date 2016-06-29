@@ -6,6 +6,10 @@ require "json_schema/review/cli"
 require "slop"
 
 opts = Slop.parse do |opt|
+  opt.string "--schema_dir",            "**/*.json under this directory is used for resolving reference"
+
+  opt.bool "--check_resolve_reference", "show errors if resolve reference failed"
+
   # help
   opt.on "-h", "--help" do
     puts opt
@@ -14,5 +18,19 @@ opts = Slop.parse do |opt|
 end
 
 files = opts.arguments
+
+
+# validations
+if files.empty?
+  warn "no files to review"
+  exit!
+end
+
+if opts[:schema_dir]
+  unless ::Dir.exist?(opts[:schema_dir])
+    warn "schema_dir not found ignore it"
+    opts[:schema_dir] = nil
+  end
+end
 
 ::JsonSchema::Review::CLI.new(files, opts).run
